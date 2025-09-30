@@ -1,39 +1,40 @@
-_G.TeamCheck            = true
-_G.ESPEnabled           = true
-_G.BoxEnabled           = true
-_G.NameEnabled          = true
-_G.ShowHPBar            = true
-_G.ShowLine             = true
-_G.AimbotEnabled        = true
-_G.DisableCameraOverride= false
-_G.FOVRadius            = 120
-_G.ESPColor             = Color3.fromRGB(0,255,180)
-_G.RainbowESP           = false
-_G.RainbowSpeed         = 0.6
-_G.BoxThickness         = 1
-_G.ESPAlpha             = 1
-_G.AimMode              = "HARD"
-_G.AimSmoothing         = 0.65
-_G.AimOffset            = 0
+-- BMOD VVIP - Compact Cyberpunk (UI + ESP + Aimbot)
+-- Single-file. Menu toggle via button. Compact layout.
 
+-- ===== SETTINGS (DEFAULT) =====
+_G.TeamCheck    = true
+_G.ESPEnabled   = true
+_G.BoxEnabled   = true
+_G.NameEnabled  = true
+_G.ShowHPBar    = true
+_G.ShowLine     = true
+_G.AimbotEnabled= true
+_G.FOVRadius    = 120
+_G.ESPColor     = Color3.fromRGB(0,255,180)
+_G.RainbowESP   = false
+_G.RainbowSpeed = 0.6
+_G.BoxThickness = 1
+_G.ESPAlpha     = 1
+
+-- ===== SERVICES =====
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
 local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 
+-- ===== DRAWING STORAGE =====
 local ESP = {}
-
 local FOV = Drawing.new("Circle")
 FOV.NumSides = 100
-FOV.Thickness = 1
 FOV.Radius = _G.FOVRadius
-FOV.Filled = false
+FOV.Thickness = 1
 FOV.Color = Color3.fromRGB(255,30,80)
+FOV.Filled = false
 FOV.Visible = true
 FOV.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
 
+-- ===== UTIL =====
 local function clamp(v,a,b) return math.max(a, math.min(b, v)) end
 
 local function safeRaycast(origin, dir, blacklist)
@@ -59,15 +60,7 @@ end
 
 local function hsvColor(h) return Color3.fromHSV((h%1), 0.9, 0.95) end
 
-local COLOR_PRESETS = {
-    {name="NeonCyan", color=Color3.fromRGB(0,255,180)},
-    {name="NeonPink", color=Color3.fromRGB(255,90,190)},
-    {name="NeonGreen", color=Color3.fromRGB(0,255,100)},
-    {name="NeonYellow", color=Color3.fromRGB(255,220,80)},
-    {name="NeonMagenta", color=Color3.fromRGB(200,0,200)},
-    {name="NeonBlue", color=Color3.fromRGB(80,140,255)}
-}
-
+-- ===== ESP DRAW CREATION / REMOVE =====
 local function CreateESP(plr)
     if ESP[plr] then return end
     ESP[plr] = {
@@ -79,27 +72,15 @@ local function CreateESP(plr)
     }
     local e = ESP[plr]
     e.Box.Thickness = _G.BoxThickness
-    e.Box.Color = _G.ESPColor
     e.Box.Filled = false
     e.Box.Transparency = _G.ESPAlpha
-
-    e.Name.Size = 14
+    e.Name.Size = 12
     e.Name.Center = true
     e.Name.Outline = true
-    e.Name.Color = e.Box.Color
-    e.Name.Transparency = _G.ESPAlpha
-
     e.HPBG.Filled = true
     e.HPBG.Color = Color3.fromRGB(0,0,0)
-    e.HPBG.Transparency = _G.ESPAlpha
-
     e.HP.Filled = true
-    e.HP.Color = Color3.fromRGB(0,255,0)
-    e.HP.Transparency = _G.ESPAlpha
-
     e.Line.Thickness = 1
-    e.Line.Color = Color3.fromRGB(255,255,255)
-    e.Line.Transparency = _G.ESPAlpha
 end
 
 local function RemoveESP(plr)
@@ -112,6 +93,7 @@ end
 
 Players.PlayerRemoving:Connect(function(plr) RemoveESP(plr) end)
 
+-- ===== TARGET/BOX CALC =====
 local function GetBox(plr)
     if not plr or not plr.Character then return end
     local char = plr.Character
@@ -162,6 +144,7 @@ local function GetClosestHeadInFOV()
     return bestHead
 end
 
+-- ===== MAIN RENDER LOOP =====
 RunService.RenderStepped:Connect(function()
     FOV.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
     FOV.Radius = _G.FOVRadius
@@ -195,7 +178,7 @@ RunService.RenderStepped:Connect(function()
 
                 if _G.NameEnabled then
                     e.Name.Visible = true
-                    e.Name.Position = Vector2.new(boxPos.X + size.X/2, boxPos.Y - 15)
+                    e.Name.Position = Vector2.new(boxPos.X + size.X/2, boxPos.Y - 12)
                     e.Name.Text = plr.Name
                 else
                     e.Name.Visible = false
@@ -243,370 +226,178 @@ RunService.RenderStepped:Connect(function()
 
     FOV.Color = anyVisible and Color3.fromRGB(0,255,100) or Color3.fromRGB(255,30,80)
 
+    -- AUTO-AIM (hard lock to visible head in FOV)
     if _G.AimbotEnabled then
         local targetHead = GetClosestHeadInFOV()
         if targetHead and targetHead.Position then
-            local aimPos = targetHead.Position + Vector3.new(0, _G.AimOffset, 0)
-            if not _G.DisableCameraOverride then
-                if _G.AimMode == "HARD" then
-                    Camera.CFrame = CFrame.new(Camera.CFrame.Position, aimPos)
-                else
-                    local desired = CFrame.new(Camera.CFrame.Position, aimPos)
-                    local s = clamp(_G.AimSmoothing, 0.01, 0.99)
-                    Camera.CFrame = Camera.CFrame:Lerp(desired, s)
-                end
-            end
+            local aimPos = targetHead.Position
+            Camera.CFrame = CFrame.new(Camera.CFrame.Position, aimPos)
         end
     end
 end)
 
-local function createHUD()
-    local parent
+-- ===== SIMPLE COMPACT UI (IN-GAME GUI) =====
+do
+    local parent = nil
     local ok = pcall(function() parent = game:GetService("CoreGui") end)
     if not ok or not parent then parent = LocalPlayer:WaitForChild("PlayerGui") end
-    if parent:FindFirstChild("BMOD_HUD") then return end
+
+    if parent:FindFirstChild("BMOD_VVIP_GUI") then parent.BMOD_VVIP_GUI:Destroy() end
 
     local gui = Instance.new("ScreenGui")
-    gui.Name = "BMOD_HUD"
+    gui.Name = "BMOD_VVIP_GUI"
     gui.ResetOnSpawn = false
     gui.Parent = parent
 
+    -- Toggle button (shows/hides menu)
+    local toggleBtn = Instance.new("TextButton", gui)
+    toggleBtn.Size = UDim2.new(0,120,0,28)
+    toggleBtn.Position = UDim2.new(0, 16, 0, 16)
+    toggleBtn.BackgroundColor3 = Color3.fromRGB(18,18,20)
+    toggleBtn.BorderSizePixel = 0
+    toggleBtn.Text = "BMOD VVIP"
+    toggleBtn.Font = Enum.Font.GothamBold
+    toggleBtn.TextSize = 14
+    toggleBtn.TextColor3 = Color3.fromRGB(0,255,160)
+
     local frame = Instance.new("Frame", gui)
-    frame.Name = "HUD"
-    frame.Size = UDim2.new(0, 180, 0, 42)
-    frame.Position = UDim2.new(0, 12, 0, 8)
+    frame.Size = UDim2.new(0, 300, 0, 220)
+    frame.Position = UDim2.new(0, 16, 0, 52)
     frame.BackgroundColor3 = Color3.fromRGB(10,10,12)
     frame.BorderSizePixel = 0
+    frame.Visible = false
     local corner = Instance.new("UICorner", frame); corner.CornerRadius = UDim.new(0,8)
     local stroke = Instance.new("UIStroke", frame); stroke.Color = Color3.fromRGB(0,255,160); stroke.Transparency = 0.9; stroke.Thickness = 1
 
-    local icon = Instance.new("Frame", frame)
-    icon.Size = UDim2.new(0,40,1, -8); icon.Position = UDim2.new(0,6,0,4)
-    icon.BackgroundColor3 = Color3.fromRGB(0,255,160); icon.BorderSizePixel = 0
-    local icorner = Instance.new("UICorner", icon); icorner.CornerRadius = UDim.new(0,6)
-    local label = Instance.new("TextLabel", frame)
-    label.Size = UDim2.new(1, -56, 1, 0); label.Position = UDim2.new(0, 52, 0, 0)
-    label.BackgroundTransparency = 1
-    label.Font = Enum.Font.GothamBold
-    label.TextSize = 14
-    label.TextColor3 = Color3.fromRGB(230,230,230)
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Text = "BMOD VVIP"
-
-    local status = Instance.new("TextLabel", frame)
-    status.Size = UDim2.new(1, -56, 0, 18)
-    status.Position = UDim2.new(0, 52, 0, 18)
-    status.BackgroundTransparency = 1
-    status.Font = Enum.Font.SourceSans
-    status.TextSize = 12
-    status.TextColor3 = Color3.fromRGB(200,200,200)
-    status.TextXAlignment = Enum.TextXAlignment.Left
-    status.Text = ""
-
-    spawn(function()
-        while gui and gui.Parent do
-            pcall(function()
-                status.Text = "ESP: "..( _G.ESPEnabled and "ON" or "OFF").."  •  AIM: "..( _G.AimbotEnabled and (_G.AimMode=="HARD" and "HARD" or "SMOOTH") or "OFF")
-                icon.BackgroundColor3 = (_G.ESPEnabled and Color3.fromRGB(0,255,160) or Color3.fromRGB(120,120,120))
-            end)
-            wait(0.25)
-        end
-    end)
-end
-
-pcall(createHUD)
-
-local function createMenu()
-    local parent
-    local ok = pcall(function() parent = game:GetService("CoreGui") end)
-    if not ok or not parent then parent = LocalPlayer:WaitForChild("PlayerGui") end
-    if parent:FindFirstChild("BMOD_VVIP_Menu") then return end
-
-    local gui = Instance.new("ScreenGui")
-    gui.Name = "BMOD_VVIP_Menu"
-    gui.ResetOnSpawn = false
-    gui.Parent = parent
-
-    local frame = Instance.new("Frame", gui)
-    frame.Name = "Main"
-    frame.Size = UDim2.new(0, 360, 0, 520)
-    frame.Position = UDim2.new(0, 18, 0, 80)
-    frame.BackgroundColor3 = Color3.fromRGB(10,10,14)
-    frame.BorderSizePixel = 0
-    frame.Active = true
-    local corner = Instance.new("UICorner", frame); corner.CornerRadius = UDim.new(0,12)
-    local stroke = Instance.new("UIStroke", frame); stroke.Color = Color3.fromRGB(0,255,160); stroke.Transparency = 0.92; stroke.Thickness = 1
-
-    local header = Instance.new("Frame", frame)
-    header.Size = UDim2.new(1,0,0,52)
-    header.Position = UDim2.new(0,0,0,0)
-    header.BackgroundTransparency = 1
-
-    local title = Instance.new("TextLabel", header)
-    title.Size = UDim2.new(1, -20, 1, 0)
-    title.Position = UDim2.new(0, 12, 0, 0)
+    -- title
+    local title = Instance.new("TextLabel", frame)
+    title.Size = UDim2.new(1, -12, 0, 28)
+    title.Position = UDim2.new(0, 6, 0, 6)
     title.BackgroundTransparency = 1
-    title.Text = "「BMOD VVIP」 • CYBERPUNK"
     title.Font = Enum.Font.GothamBold
-    title.TextSize = 16
+    title.TextSize = 14
     title.TextColor3 = Color3.fromRGB(230,230,230)
-    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.Text = "「BMOD VVIP」 • CYBERPUNK"
 
-    local ver = Instance.new("TextLabel", header)
-    ver.Size = UDim2.new(0, 60, 1, 0)
-    ver.Position = UDim2.new(1, -74, 0, 0)
-    ver.BackgroundTransparency = 1
-    ver.Text = "v3.1"
-    ver.Font = Enum.Font.Gotham
-    ver.TextSize = 12
-    ver.TextColor3 = Color3.fromRGB(180,180,180)
-    ver.TextXAlignment = Enum.TextXAlignment.Right
+    -- compact grid container
+    local content = Instance.new("Frame", frame)
+    content.Size = UDim2.new(1, -12, 1, -44)
+    content.Position = UDim2.new(0, 6, 0, 38)
+    content.BackgroundTransparency = 1
+    local grid = Instance.new("UIGridLayout", content)
+    grid.CellSize = UDim2.new(0, 140, 0, 28)
+    grid.CellPadding = UDim2.new(0, 6)
 
-    local closeBtn = Instance.new("TextButton", header)
-    closeBtn.Size = UDim2.new(0, 28, 0, 24)
-    closeBtn.Position = UDim2.new(1, -38, 0, 14)
-    closeBtn.Text = "✕"
-    closeBtn.Font = Enum.Font.GothamBold
-    closeBtn.TextSize = 14
-    closeBtn.TextColor3 = Color3.fromRGB(220,220,220)
-    closeBtn.BackgroundColor3 = Color3.fromRGB(18,18,20)
-    closeBtn.BorderSizePixel = 0
-
-    local minBtn = Instance.new("TextButton", header)
-    minBtn.Size = UDim2.new(0, 28, 0, 24)
-    minBtn.Position = UDim2.new(1, -72, 0, 14)
-    minBtn.Text = "–"
-    minBtn.Font = Enum.Font.GothamBold
-    minBtn.TextSize = 14
-    minBtn.TextColor3 = Color3.fromRGB(220,220,220)
-    minBtn.BackgroundColor3 = Color3.fromRGB(18,18,20)
-    minBtn.BorderSizePixel = 0
-
-    local scroll = Instance.new("ScrollingFrame", frame)
-    scroll.Size = UDim2.new(1, -12, 1, -72)
-    scroll.Position = UDim2.new(0,6,0,64)
-    scroll.BackgroundTransparency = 1
-    scroll.BorderSizePixel = 0
-    scroll.CanvasSize = UDim2.new(0,0,2,0)
-    scroll.ScrollBarThickness = 6
-
-    local list = Instance.new("UIListLayout", scroll)
-    list.SortOrder = Enum.SortOrder.LayoutOrder
-    list.Padding = UDim.new(0,8)
-
-    local function ToggleRow(text, getter, setter)
-        local row = Instance.new("Frame", scroll)
-        row.Size = UDim2.new(1, -12, 0, 40)
-        row.BackgroundTransparency = 1
-
-        local lbl = Instance.new("TextLabel", row)
-        lbl.Size = UDim2.new(0.66, 0, 1, 0)
-        lbl.Position = UDim2.new(0, 12, 0, 0)
-        lbl.BackgroundTransparency = 1
-        lbl.Text = text
-        lbl.Font = Enum.Font.Gotham
-        lbl.TextSize = 14
-        lbl.TextColor3 = Color3.fromRGB(220,220,220)
-        lbl.TextXAlignment = Enum.TextXAlignment.Left
-
-        local sw = Instance.new("Frame", row)
-        sw.Size = UDim2.new(0, 58, 0, 30)
-        sw.Position = UDim2.new(1, -80, 0, 5)
-        sw.BackgroundColor3 = getter() and Color3.fromRGB(0,255,160) or Color3.fromRGB(40,40,46)
-        sw.BorderSizePixel = 0
-        local swc = Instance.new("UICorner", sw); swc.CornerRadius = UDim.new(1,0)
-
-        local knob = Instance.new("Frame", sw)
-        knob.Size = UDim2.new(0, 26, 0, 26)
-        knob.Position = getter() and UDim2.new(1, -30, 0, 2) or UDim2.new(0, 2, 0, 2)
-        knob.BackgroundColor3 = Color3.fromRGB(14,14,16)
-        local knc = Instance.new("UICorner", knob); knc.CornerRadius = UDim.new(1,0)
-
-        local function toggle()
-            local new = not getter()
-            setter(new)
-            TweenService:Create(sw, TweenInfo.new(0.12), {BackgroundColor3 = new and Color3.fromRGB(0,255,160) or Color3.fromRGB(40,40,46)}):Play()
-            local tpos = new and UDim2.new(1, -30, 0, 2) or UDim2.new(0, 2, 0, 2)
-            TweenService:Create(knob, TweenInfo.new(0.12), {Position = tpos}):Play()
-        end
-
-        sw.InputBegan:Connect(function(inp)
-            if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
-                toggle()
-            end
+    -- helper to make small toggle buttons
+    local function makeToggle(text, getFunc, setFunc)
+        local b = Instance.new("TextButton", content)
+        b.Size = UDim2.new(0, 140, 0, 28)
+        b.BackgroundColor3 = getFunc() and Color3.fromRGB(0,255,160) or Color3.fromRGB(28,28,34)
+        b.BorderSizePixel = 0
+        b.Font = Enum.Font.Gotham
+        b.TextSize = 13
+        b.TextColor3 = Color3.fromRGB(18,18,20)
+        b.Text = text
+        local corner = Instance.new("UICorner", b); corner.CornerRadius = UDim.new(0,6)
+        b.MouseButton1Click:Connect(function()
+            setFunc(not getFunc())
+            b.BackgroundColor3 = getFunc() and Color3.fromRGB(0,255,160) or Color3.fromRGB(28,28,34)
         end)
+        return b
     end
 
-    local function SliderRow(text, getter, setter, minV, maxV)
-        local row = Instance.new("Frame", scroll)
-        row.Size = UDim2.new(1, -12, 0, 60)
-        row.BackgroundTransparency = 1
+    -- helper small slider (click cycles value)
+    local function makeSliderSmall(label, getFunc, setFunc, minV, maxV, step)
+        local container = Instance.new("Frame", content)
+        container.Size = UDim2.new(0, 140, 0, 28)
+        container.BackgroundTransparency = 1
 
-        local lbl = Instance.new("TextLabel", row)
-        lbl.Size = UDim2.new(0.6, 0, 0, 18)
-        lbl.Position = UDim2.new(0, 12, 0, 0)
+        local lbl = Instance.new("TextLabel", container)
+        lbl.Size = UDim2.new(0.6, 0, 1, 0)
         lbl.BackgroundTransparency = 1
-        lbl.Text = text
         lbl.Font = Enum.Font.Gotham
         lbl.TextSize = 13
-        lbl.TextColor3 = Color3.fromRGB(220,220,220)
-        lbl.TextXAlignment = Enum.TextXAlignment.Left
+        lbl.TextColor3 = Color3.fromRGB(200,200,200)
+        lbl.Text = label..": "..tostring(getFunc())
 
-        local val = Instance.new("TextLabel", row)
-        val.Size = UDim2.new(0.3, 0, 0, 18)
-        val.Position = UDim2.new(1, -90, 0, 0)
-        val.BackgroundTransparency = 1
-        val.Text = tostring(getter())
-        val.Font = Enum.Font.SourceSans
-        val.TextSize = 13
-        val.TextColor3 = Color3.fromRGB(200,200,200)
-        val.TextXAlignment = Enum.TextXAlignment.Right
+        local btn = Instance.new("TextButton", container)
+        btn.Size = UDim2.new(0.4, -4, 1, 0)
+        btn.Position = UDim2.new(0.6, 4, 0, 0)
+        btn.BackgroundColor3 = Color3.fromRGB(28,28,34)
+        btn.BorderSizePixel = 0
+        btn.Font = Enum.Font.GothamBold
+        btn.TextSize = 13
+        btn.TextColor3 = Color3.fromRGB(200,200,200)
+        btn.Text = tostring(getFunc())
+        local corner = Instance.new("UICorner", btn); corner.CornerRadius = UDim.new(0,6)
 
-        local barBg = Instance.new("Frame", row)
-        barBg.Size = UDim2.new(1, -24, 0, 12)
-        barBg.Position = UDim2.new(0, 12, 0, 34)
-        barBg.BackgroundColor3 = Color3.fromRGB(28,28,34)
-        barBg.BorderSizePixel = 0
-        local br = Instance.new("UICorner", barBg); br.CornerRadius = UDim.new(0,6)
-
-        local fill = Instance.new("Frame", barBg)
-        fill.Size = UDim2.new((getter() - minV)/(maxV - minV), 0, 1, 0)
-        fill.BackgroundColor3 = Color3.fromRGB(0,255,160)
-        fill.BorderSizePixel = 0
-        local fr = Instance.new("UICorner", fill); fr.CornerRadius = UDim.new(0,6)
-
-        local handle = Instance.new("Frame", barBg)
-        handle.Size = UDim2.new(0, 14, 0, 14)
-        handle.Position = UDim2.new((getter() - minV)/(maxV - minV), -7, 0, -1)
-        handle.BackgroundColor3 = Color3.fromRGB(240,240,240)
-        local hr = Instance.new("UICorner", handle); hr.CornerRadius = UDim.new(1,0)
-
-        local dragging = false
-        local function updateFromX(x)
-            local rel = clamp((x - barBg.AbsolutePosition.X) / barBg.AbsoluteSize.X, 0, 1)
-            local v = math.floor(minV + rel * (maxV - minV))
-            setter(v)
-            fill.Size = UDim2.new(rel, 0, 1, 0)
-            handle.Position = UDim2.new(rel, -7, 0, -1)
-            val.Text = tostring(v)
-        end
-
-        UserInputService.InputBegan:Connect(function(input, gp)
-            if gp then return end
-            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                local pos = input.Position or UserInputService:GetMouseLocation()
-                if pos.X >= barBg.AbsolutePosition.X and pos.X <= barBg.AbsolutePosition.X + barBg.AbsoluteSize.X
-                and pos.Y >= barBg.AbsolutePosition.Y and pos.Y <= barBg.AbsolutePosition.Y + barBg.AbsoluteSize.Y then
-                    dragging = true
-                    updateFromX(pos.X)
-                end
-            end
+        btn.MouseButton1Click:Connect(function()
+            local cur = getFunc()
+            local s = step or 1
+            cur = cur + s
+            if cur > maxV then cur = minV end
+            setFunc(cur)
+            lbl.Text = label..": "..tostring(cur)
+            btn.Text = tostring(cur)
         end)
-        UserInputService.InputChanged:Connect(function(input)
-            if not dragging then return end
-            if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-                local pos = input.Position or UserInputService:GetMouseLocation()
-                updateFromX(pos.X)
-            end
-        end)
-        UserInputService.InputEnded:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                dragging = false
-            end
-        end)
+
+        return container
     end
 
-    ToggleRow("ESP", function() return _G.ESPEnabled end, function(v) _G.ESPEnabled = v end)
-    ToggleRow("Boxes", function() return _G.BoxEnabled end, function(v) _G.BoxEnabled = v end)
-    ToggleRow("Names", function() return _G.NameEnabled end, function(v) _G.NameEnabled = v end)
-    ToggleRow("HP Bar", function() return _G.ShowHPBar end, function(v) _G.ShowHPBar = v end)
-    ToggleRow("Line", function() return _G.ShowLine end, function(v) _G.ShowLine = v end)
-    ToggleRow("Aimbot", function() return _G.AimbotEnabled end, function(v) _G.AimbotEnabled = v end)
-    ToggleRow("Team Check", function() return _G.TeamCheck end, function(v) _G.TeamCheck = v end)
-    ToggleRow("Disable Cam Override", function() return _G.DisableCameraOverride end, function(v) _G.DisableCameraOverride = v end)
-    ToggleRow("Rainbow ESP", function() return _G.RainbowESP end, function(v) _G.RainbowESP = v end)
+    -- make toggles (compact)
+    makeToggle("ESP", function() return _G.ESPEnabled end, function(v) _G.ESPEnabled = v end)
+    makeToggle("Boxes", function() return _G.BoxEnabled end, function(v) _G.BoxEnabled = v end)
+    makeToggle("Names", function() return _G.NameEnabled end, function(v) _G.NameEnabled = v end)
+    makeToggle("HP Bar", function() return _G.ShowHPBar end, function(v) _G.ShowHPBar = v end)
+    makeToggle("Line", function() return _G.ShowLine end, function(v) _G.ShowLine = v end)
+    makeToggle("Aimbot", function() return _G.AimbotEnabled end, function(v) _G.AimbotEnabled = v end)
+    makeToggle("TeamCheck", function() return _G.TeamCheck end, function(v) _G.TeamCheck = v end)
+    makeToggle("Rainbow", function() return _G.RainbowESP end, function(v) _G.RainbowESP = v end)
 
-    local presetRow = Instance.new("Frame", scroll)
-    presetRow.Size = UDim2.new(1, -12, 0, 44); presetRow.BackgroundTransparency = 1
-    local pl = Instance.new("TextLabel", presetRow)
-    pl.Size = UDim2.new(0.5,0,0,18); pl.Position = UDim2.new(0,12,0,0); pl.BackgroundTransparency = 1
-    pl.Text = "Color Presets"; pl.Font = Enum.Font.Gotham; pl.TextColor3 = Color3.fromRGB(220,220,220)
-
-    local xpos = 12
-    for i,p in ipairs(COLOR_PRESETS) do
-        local b = Instance.new("TextButton", presetRow)
-        b.Size = UDim2.new(0, 36, 0, 36)
-        b.Position = UDim2.new(0, xpos, 0, 6)
-        b.BackgroundColor3 = p.color
-        b.BorderSizePixel = 0
-        b.AutoButtonColor = false
-        local bc = Instance.new("UICorner", b); bc.CornerRadius = UDim.new(0,6)
-        b.MouseButton1Click:Connect(function()
-            _G.ESPColor = p.color
+    -- color presets (no "button" text) - small color boxes row
+    local colorFrame = Instance.new("Frame", frame)
+    colorFrame.Size = UDim2.new(1, -12, 0, 36)
+    colorFrame.Position = UDim2.new(0, 6, 1, -42)
+    colorFrame.BackgroundTransparency = 1
+    local x = 6
+    local presets = {
+        Color3.fromRGB(0,255,180),
+        Color3.fromRGB(255,90,190),
+        Color3.fromRGB(0,255,100),
+        Color3.fromRGB(255,220,80),
+        Color3.fromRGB(200,0,200),
+        Color3.fromRGB(80,140,255)
+    }
+    for i,c in ipairs(presets) do
+        local cb = Instance.new("TextButton", colorFrame)
+        cb.Size = UDim2.new(0, 28, 0, 28)
+        cb.Position = UDim2.new(0, x, 0, 4)
+        cb.BackgroundColor3 = c
+        cb.BorderSizePixel = 0
+        local bc = Instance.new("UICorner", cb); bc.CornerRadius = UDim.new(0,6)
+        cb.Text = ""
+        cb.MouseButton1Click:Connect(function()
+            _G.ESPColor = c
             _G.RainbowESP = false
         end)
-        xpos = xpos + 42
+        x = x + 34
     end
 
-    SliderRow("FOV Radius", function() return _G.FOVRadius end, function(v) _G.FOVRadius = v end, 20, 1000)
-    SliderRow("Aim Offset (studs)", function() return _G.AimOffset end, function(v) _G.AimOffset = v end, -5, 10)
-    SliderRow("Aim Smoothing (%)", function() return math.floor(_G.AimSmoothing * 100) end, function(v) _G.AimSmoothing = clamp(v/100, 0.01, 0.99) end, 1, 99)
-    SliderRow("Rainbow Speed (%)", function() return math.floor(_G.RainbowSpeed * 100) end, function(v) _G.RainbowSpeed = clamp(v/100, 1, 400)/100 end, 1, 400)
-    SliderRow("Box Thickness", function() return _G.BoxThickness end, function(v) _G.BoxThickness = clamp(v,1,8) end, 1, 8)
-    SliderRow("ESP Alpha (%)", function() return math.floor(_G.ESPAlpha * 100) end, function(v) _G.ESPAlpha = clamp(v/100, 0, 1) end, 0, 100)
+    -- small sliders (fov, rainbow speed, thickness, alpha)
+    makeSliderSmall("FOV", function() return _G.FOVRadius end, function(v) _G.FOVRadius = v end, 20, 1000, 10)
+    makeSliderSmall("RainbowSPD", function() return math.floor(_G.RainbowSpeed*100) end, function(v) _G.RainbowSpeed = clamp(v/100, 0.01, 3) end, 1, 400, 25)
+    makeSliderSmall("Thickness", function() return _G.BoxThickness end, function(v) _G.BoxThickness = v end, 1, 8, 1)
+    makeSliderSmall("Alpha", function() return math.floor(_G.ESPAlpha*100) end, function(v) _G.ESPAlpha = clamp(v/100, 0, 1) end, 0, 100, 10)
 
-    local footer = Instance.new("Frame", scroll); footer.Size = UDim2.new(1,-12,0,44); footer.BackgroundTransparency = 1
-    local reset = Instance.new("TextButton", footer)
-    reset.Size = UDim2.new(0.46, -6, 1, 0); reset.Position = UDim2.new(0,12,0,0)
-    reset.Text = "Reset"; reset.Font = Enum.Font.GothamBold; reset.TextColor3 = Color3.fromRGB(240,240,240)
-    reset.BackgroundColor3 = Color3.fromRGB(20,20,24); reset.BorderSizePixel = 0
-    reset.MouseButton1Click:Connect(function()
-        _G.TeamCheck = true; _G.ESPEnabled=true; _G.BoxEnabled=true; _G.NameEnabled=true
-        _G.ShowHPBar=true; _G.ShowLine=true; _G.AimbotEnabled=true; _G.DisableCameraOverride=false
-        _G.FOVRadius=120; _G.ESPColor=Color3.fromRGB(0,255,180); _G.RainbowESP=false; _G.RainbowSpeed=0.6
-        _G.BoxThickness=1; _G.ESPAlpha=1; _G.AimMode="HARD"; _G.AimSmoothing=0.65; _G.AimOffset=0
+    -- close & toggle
+    toggleBtn.MouseButton1Click:Connect(function()
+        frame.Visible = not frame.Visible
     end)
 
-    local hide = Instance.new("TextButton", footer)
-    hide.Size = UDim2.new(0.46, -6, 1, 0); hide.Position = UDim2.new(1, -(12 + 160), 0, 0)
-    hide.Text = "Hide"; hide.Font = Enum.Font.GothamBold; hide.TextColor3 = Color3.fromRGB(240,240,240)
-    hide.BackgroundColor3 = Color3.fromRGB(20,20,24); hide.BorderSizePixel = 0
-    hide.MouseButton1Click:Connect(function() frame.Visible = false end)
-
-    local aimModeRow = Instance.new("Frame", scroll); aimModeRow.Size = UDim2.new(1,-12,0,40); aimModeRow.BackgroundTransparency = 1
-    local amLabel = Instance.new("TextLabel", aimModeRow); amLabel.Size = UDim2.new(0.6,0,1,0); amLabel.Position = UDim2.new(0,12,0,0); amLabel.BackgroundTransparency=1
-    amLabel.Text = "Aim Mode"; amLabel.Font = Enum.Font.Gotham; amLabel.TextColor3 = Color3.fromRGB(220,220,220)
-    local hardBtn = Instance.new("TextButton", aimModeRow); hardBtn.Size = UDim2.new(0,80,0,28); hardBtn.Position = UDim2.new(1, -190, 0, 6)
-    hardBtn.Text = "HARD"; hardBtn.Font = Enum.Font.GothamBold; hardBtn.TextSize = 14; hardBtn.BackgroundColor3 = Color3.fromRGB(40,40,48)
-    local smoothBtn = Instance.new("TextButton", aimModeRow); smoothBtn.Size = UDim2.new(0,80,0,28); smoothBtn.Position = UDim2.new(1, -100, 0, 6)
-    smoothBtn.Text = "SMOOTH"; smoothBtn.Font = Enum.Font.GothamBold; smoothBtn.TextSize = 14; smoothBtn.BackgroundColor3 = Color3.fromRGB(40,40,48)
-    local function updateAimButtons()
-        if _G.AimMode == "HARD" then
-            hardBtn.BackgroundColor3 = Color3.fromRGB(0,255,160)
-            smoothBtn.BackgroundColor3 = Color3.fromRGB(40,40,48)
-        else
-            smoothBtn.BackgroundColor3 = Color3.fromRGB(0,255,160)
-            hardBtn.BackgroundColor3 = Color3.fromRGB(40,40,48)
-        end
-    end
-    hardBtn.MouseButton1Click:Connect(function() _G.AimMode="HARD"; updateAimButtons() end)
-    smoothBtn.MouseButton1Click:Connect(function() _G.AimMode="SMOOTH"; updateAimButtons() end)
-    updateAimButtons()
-
-    closeBtn.MouseButton1Click:Connect(function() gui:Destroy() end)
-    minBtn.MouseButton1Click:Connect(function()
-        if scroll.Visible then
-            scroll.Visible = false; frame.Size = UDim2.new(0,360,0,52); minBtn.Text = "+"
-        else
-            scroll.Visible = true; frame.Size = UDim2.new(0,360,0,520); minBtn.Text = "–"
-        end
-    end)
-
-    local dragging = false
-    local dragStart = nil
-    local startPos = nil
-    header.InputBegan:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+    -- small drag for frame
+    local dragging, dragStart, startPos = false, nil, nil
+    title.InputBegan:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.MouseButton1 then
             dragging = true
             dragStart = inp.Position
             startPos = frame.Position
@@ -622,31 +413,6 @@ local function createMenu()
             frame.Position = UDim2.new(0, startPos.X.Offset + delta.X, 0, startPos.Y.Offset + delta.Y)
         end
     end)
-
-    return gui
 end
 
-pcall(createMenu)
-
-do
-    local tapTimes = {}
-    local function onTouch(input)
-        if input.UserInputType == Enum.UserInputType.Touch then
-            local now = tick()
-            table.insert(tapTimes, now)
-            while #tapTimes > 3 do table.remove(tapTimes,1) end
-            if #tapTimes >= 2 and tapTimes[#tapTimes] - tapTimes[#tapTimes-1] <= 0.35 then
-                local menu = nil
-                pcall(function() menu = (game:GetService("CoreGui").BMOD_VVIP_Menu or (LocalPlayer:FindFirstChild("PlayerGui") and LocalPlayer.PlayerGui:FindFirstChild("BMOD_VVIP_Menu"))) end)
-                if menu and menu.Parent then
-                    local mf = menu:FindFirstChild("Main")
-                    if mf then mf.Visible = not mf.Visible end
-                end
-            end
-        end
-    end
-    UserInputService.InputBegan:Connect(function(input, gp)
-        if gp then return end
-        if input.UserInputType == Enum.UserInputType.Touch then onTouch(input) end
-    end)
-end
+-- End of script
